@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NeuroLearn — Mouse Learning Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f7f5f0;--surface:#ffffff;--border:#e8e4dc;--border2:#d4cfc4;
+  --text:#1a1814;--muted:#7a7468;--accent:#2d6a4f;--accent2:#1e4d8c;
+  --warn:#c05a1a;--vision:#1e4d8c;--audio:#c05a1a;
+  --green:#2d6a4f;--red:#b52a2a;
+  --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.6;min-height:100vh}
+
+nav{background:var(--surface);border-bottom:1px solid var(--border);padding:0 40px;display:flex;align-items:center;height:52px;position:sticky;top:0;z-index:100}
+.nav-brand{font-family:var(--mono);font-size:15px;font-weight:500;letter-spacing:-0.01em}
+.nav-brand span{color:var(--accent)}
+
+.wrap{max-width:900px;margin:0 auto;padding:40px 40px 64px}
+
+.mouse-bar{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px 20px;display:flex;align-items:center;gap:14px;margin-bottom:24px;flex-wrap:wrap}
+.mouse-chip{padding:7px 16px;border-radius:100px;border:1.5px solid var(--border2);background:transparent;font-family:var(--mono);font-size:12px;cursor:pointer;color:var(--muted);transition:all .15s;white-space:nowrap}
+.mouse-chip:hover{border-color:var(--accent);color:var(--accent)}
+.mouse-chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px}
+@media(max-width:540px){.stat-row{grid-template-columns:1fr 1fr}}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 18px 14px}
+.stat-card .label{font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px}
+.stat-card .value{font-size:28px;font-weight:300;letter-spacing:-0.02em}
+.stat-card .sub{font-size:12px;color:var(--muted);margin-top:2px}
+.val-green{color:var(--green)}
+.val-blue{color:var(--accent2)}
+.val-orange{color:var(--warn)}
+
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px}
+.chart-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:8px}
+.chart-title{font-size:15px;font-weight:500;letter-spacing:-0.01em}
+.chart-desc{font-size:12px;color:var(--muted);margin-top:2px}
+.legend{display:flex;gap:16px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.legend-line{width:20px;height:2px;flex-shrink:0;border-radius:1px}
+canvas{display:block;width:100%!important}
+
+#tt{position:fixed;background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:10px 14px;font-size:12px;color:var(--text);pointer-events:none;opacity:0;transition:opacity .1s;z-index:999;line-height:1.8;min-width:160px;box-shadow:0 4px 16px rgba(0,0,0,.08)}
+#tt.show{opacity:1}
+#tt .tt-head{font-family:var(--mono);font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);padding-bottom:4px;margin-bottom:4px;letter-spacing:.06em}
+#tt .tt-row{display:flex;justify-content:space-between;gap:16px}
+#tt .tt-k{color:var(--muted)}
+#tt .tt-v{font-weight:500}
+</style>
+</head>
+<body>
+
+<div id="tt"><div class="tt-head" id="tt-head"></div><div id="tt-body"></div></div>
+
+<nav>
+  <div class="nav-brand">Neuro<span>Learn</span></div>
+</nav>
+
+
+<div class="wrap">
+  <div class="mouse-bar">
+    <!-- <button class="mouse-chip" onclick="selectMouse('GR010',event)">GR010 — Complete</button> -->
+    <button class="mouse-chip active" onclick="selectMouse('GR011',event)">GR011 — In Training</button>
+  </div>
+
+  <div class="stat-row" id="stat-row"></div>
+
+  <div class="chart-card">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Learning trajectory</div>
+        <div class="chart-desc">Performance over sessions — colored by modality · dashed lines = phase boundaries</div>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--accent2)"></div>Vision</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--warn)"></div>Audio</div>
+        <div class="legend-item"><div class="legend-line" style="background:var(--accent)"></div>Rolling avg</div>
+      </div>
+    </div>
+    <canvas id="c-perf" height="260"></canvas>
+  </div>
+</div>
+
+<script>
+const GR011 = [{"day_index": 1, "date": 20230601, "phase_id": 1, "session_in_phase": 1, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.1389, "perf_final": 0.2171, "l_perf_final": 0.2212, "r_perf_final": 0.2636, "rt_median": 0.15858, "rt_impulsive_frac": 0.635, "days_to_next_switch": 47.347534, "progress_to_switch": 0.0, "sessions_since_switch": 0.0, "switch_imminent": 0.0, "n_trials": 579, "engage_rate": 0.911, "switch_perf_drop": NaN, "perf_asymmetry": -0.0424, "animal_weight": 23.4}, {"day_index": 2, "date": 20230602, "phase_id": 1, "session_in_phase": 2, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.3183, "perf_final": 0.2963, "l_perf_final": 0.4014, "r_perf_final": 0.1678, "rt_median": 0.20708, "rt_impulsive_frac": 0.666, "days_to_next_switch": 47.96877, "progress_to_switch": 0.0455, "sessions_since_switch": 1.0, "switch_imminent": 0.0, "n_trials": 507, "engage_rate": 0.916, "switch_perf_drop": NaN, "perf_asymmetry": 0.2336, "animal_weight": 25.2}, {"day_index": 3, "date": 20230603, "phase_id": 1, "session_in_phase": 3, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.3039, "perf_final": 0.2998, "l_perf_final": 0.2625, "r_perf_final": 0.37, "rt_median": 0.2088, "rt_impulsive_frac": 0.67, "days_to_next_switch": 47.856224, "progress_to_switch": 0.0909, "sessions_since_switch": 2.0, "switch_imminent": 0.0, "n_trials": 602, "engage_rate": 0.917, "switch_perf_drop": NaN, "perf_asymmetry": -0.1076, "animal_weight": 23.2}, {"day_index": 4, "date": 20230604, "phase_id": 1, "session_in_phase": 4, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.2654, "perf_final": 0.3334, "l_perf_final": 0.3401, "r_perf_final": 0.3466, "rt_median": 0.16844, "rt_impulsive_frac": 0.667, "days_to_next_switch": 46.781303, "progress_to_switch": 0.1364, "sessions_since_switch": 3.0, "switch_imminent": 0.0, "n_trials": 612, "engage_rate": 0.936, "switch_perf_drop": NaN, "perf_asymmetry": -0.0065, "animal_weight": 24.0}, {"day_index": 5, "date": 20230605, "phase_id": 1, "session_in_phase": 5, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.4172, "perf_final": 0.422, "l_perf_final": 0.5009, "r_perf_final": 0.3602, "rt_median": 0.18417, "rt_impulsive_frac": 0.627, "days_to_next_switch": 46.23726, "progress_to_switch": 0.1818, "sessions_since_switch": 4.0, "switch_imminent": 0.0, "n_trials": 530, "engage_rate": 0.946, "switch_perf_drop": NaN, "perf_asymmetry": 0.1407, "animal_weight": 22.8}, {"day_index": 6, "date": 20230606, "phase_id": 1, "session_in_phase": 6, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.4456, "perf_final": 0.4774, "l_perf_final": 0.4833, "r_perf_final": 0.4102, "rt_median": 0.19271, "rt_impulsive_frac": 0.6, "days_to_next_switch": 45.2205, "progress_to_switch": 0.2273, "sessions_since_switch": 5.0, "switch_imminent": 0.0, "n_trials": 552, "engage_rate": 0.919, "switch_perf_drop": NaN, "perf_asymmetry": 0.0731, "animal_weight": 23.4}, {"day_index": 7, "date": 20230607, "phase_id": 1, "session_in_phase": 7, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.5929, "perf_final": 0.5426, "l_perf_final": 0.3553, "r_perf_final": 0.6553, "rt_median": 0.19612, "rt_impulsive_frac": 0.597, "days_to_next_switch": 45.03199, "progress_to_switch": 0.2727, "sessions_since_switch": 6.0, "switch_imminent": 0.0, "n_trials": 404, "engage_rate": 0.925, "switch_perf_drop": NaN, "perf_asymmetry": -0.3, "animal_weight": 24.7}, {"day_index": 8, "date": 20230608, "phase_id": 1, "session_in_phase": 8, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.4994, "perf_final": 0.5705, "l_perf_final": 0.6425, "r_perf_final": 0.5319, "rt_median": 0.17839, "rt_impulsive_frac": 0.589, "days_to_next_switch": 45.011, "progress_to_switch": 0.3182, "sessions_since_switch": 7.0, "switch_imminent": 0.0, "n_trials": 389, "engage_rate": 0.922, "switch_perf_drop": NaN, "perf_asymmetry": 0.1106, "animal_weight": 25.6}, {"day_index": 9, "date": 20230609, "phase_id": 1, "session_in_phase": 9, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.7012, "perf_final": 0.688, "l_perf_final": 0.8017, "r_perf_final": 0.5793, "rt_median": 0.21297, "rt_impulsive_frac": 0.723, "days_to_next_switch": 41.515423, "progress_to_switch": 0.3636, "sessions_since_switch": 8.0, "switch_imminent": 0.0, "n_trials": 427, "engage_rate": 0.931, "switch_perf_drop": NaN, "perf_asymmetry": 0.2223, "animal_weight": 25.1}, {"day_index": 10, "date": 20230610, "phase_id": 1, "session_in_phase": 10, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.6622, "perf_final": 0.6568, "l_perf_final": 0.6521, "r_perf_final": 0.6667, "rt_median": 0.21343, "rt_impulsive_frac": 0.638, "days_to_next_switch": 41.273563, "progress_to_switch": 0.4091, "sessions_since_switch": 9.0, "switch_imminent": 0.0, "n_trials": 306, "engage_rate": 0.944, "switch_perf_drop": NaN, "perf_asymmetry": -0.0146, "animal_weight": 24.7}, {"day_index": 11, "date": 20230611, "phase_id": 1, "session_in_phase": 11, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.7792, "perf_final": 0.7686, "l_perf_final": 0.6837, "r_perf_final": 0.826, "rt_median": 0.1885, "rt_impulsive_frac": 0.55, "days_to_next_switch": 42.151226, "progress_to_switch": 0.4545, "sessions_since_switch": 10.0, "switch_imminent": 0.0, "n_trials": 619, "engage_rate": 0.943, "switch_perf_drop": NaN, "perf_asymmetry": -0.1423, "animal_weight": 24.4}, {"day_index": 12, "date": 20230612, "phase_id": 1, "session_in_phase": 12, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.643, "perf_final": 0.731, "l_perf_final": 0.727, "r_perf_final": 0.7659, "rt_median": 0.14682, "rt_impulsive_frac": 0.641, "days_to_next_switch": 41.38472, "progress_to_switch": 0.5, "sessions_since_switch": 11.0, "switch_imminent": 0.0, "n_trials": 501, "engage_rate": 0.938, "switch_perf_drop": NaN, "perf_asymmetry": -0.0389, "animal_weight": 22.5}, {"day_index": 13, "date": 20230613, "phase_id": 1, "session_in_phase": 13, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.835, "perf_final": 0.7743, "l_perf_final": 0.6479, "r_perf_final": 0.891, "rt_median": 0.18968, "rt_impulsive_frac": 0.675, "days_to_next_switch": 40.29459, "progress_to_switch": 0.5455, "sessions_since_switch": 12.0, "switch_imminent": 0.0, "n_trials": 605, "engage_rate": 0.934, "switch_perf_drop": NaN, "perf_asymmetry": -0.2431, "animal_weight": 25.3}, {"day_index": 14, "date": 20230614, "phase_id": 1, "session_in_phase": 14, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.7542, "perf_final": 0.8208, "l_perf_final": 0.896, "r_perf_final": 0.7212, "rt_median": 0.18756, "rt_impulsive_frac": 0.576, "days_to_next_switch": 40.658596, "progress_to_switch": 0.5909, "sessions_since_switch": 13.0, "switch_imminent": 0.0, "n_trials": 421, "engage_rate": 0.911, "switch_perf_drop": NaN, "perf_asymmetry": 0.1747, "animal_weight": 22.9}, {"day_index": 15, "date": 20230615, "phase_id": 1, "session_in_phase": 15, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.7509, "perf_final": 0.7709, "l_perf_final": 0.721, "r_perf_final": 0.8092, "rt_median": 0.15558, "rt_impulsive_frac": 0.706, "days_to_next_switch": 39.92181, "progress_to_switch": 0.6364, "sessions_since_switch": 14.0, "switch_imminent": 0.0, "n_trials": 601, "engage_rate": 0.904, "switch_perf_drop": NaN, "perf_asymmetry": -0.0882, "animal_weight": 22.5}, {"day_index": 16, "date": 20230616, "phase_id": 1, "session_in_phase": 16, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.893, "perf_final": 0.8971, "l_perf_final": 0.8302, "r_perf_final": 1.0, "rt_median": 0.14333, "rt_impulsive_frac": 0.555, "days_to_next_switch": 40.53757, "progress_to_switch": 0.6818, "sessions_since_switch": 15.0, "switch_imminent": 0.0, "n_trials": 664, "engage_rate": 0.91, "switch_perf_drop": NaN, "perf_asymmetry": -0.1698, "animal_weight": 25.1}, {"day_index": 17, "date": 20230617, "phase_id": 1, "session_in_phase": 17, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.7864, "perf_final": 0.8813, "l_perf_final": 0.817, "r_perf_final": 0.8659, "rt_median": 0.18467, "rt_impulsive_frac": 0.722, "days_to_next_switch": 40.17894, "progress_to_switch": 0.7273, "sessions_since_switch": 16.0, "switch_imminent": 0.0, "n_trials": 574, "engage_rate": 0.917, "switch_perf_drop": NaN, "perf_asymmetry": -0.0489, "animal_weight": 23.5}, {"day_index": 18, "date": 20230618, "phase_id": 1, "session_in_phase": 18, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.9363, "perf_final": 0.9356, "l_perf_final": 0.9269, "r_perf_final": 0.9258, "rt_median": 0.18778, "rt_impulsive_frac": 0.595, "days_to_next_switch": 40.293163, "progress_to_switch": 0.7727, "sessions_since_switch": 17.0, "switch_imminent": 0.0, "n_trials": 547, "engage_rate": 0.914, "switch_perf_drop": NaN, "perf_asymmetry": 0.0011, "animal_weight": 23.2}, {"day_index": 19, "date": 20230619, "phase_id": 1, "session_in_phase": 19, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.8783, "perf_final": 0.9066, "l_perf_final": 0.9486, "r_perf_final": 0.7529, "rt_median": 0.16998, "rt_impulsive_frac": 0.704, "days_to_next_switch": 38.867928, "progress_to_switch": 0.8182, "sessions_since_switch": 18.0, "switch_imminent": 0.0, "n_trials": 595, "engage_rate": 0.945, "switch_perf_drop": NaN, "perf_asymmetry": 0.1957, "animal_weight": 22.0}, {"day_index": 20, "date": 20230620, "phase_id": 1, "session_in_phase": 20, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.8855, "perf_final": 0.9262, "l_perf_final": 0.9191, "r_perf_final": 0.85, "rt_median": 0.12018, "rt_impulsive_frac": 0.607, "days_to_next_switch": 37.761547, "progress_to_switch": 0.8636, "sessions_since_switch": 19.0, "switch_imminent": 0.0, "n_trials": 554, "engage_rate": 0.904, "switch_perf_drop": NaN, "perf_asymmetry": 0.0691, "animal_weight": 23.1}, {"day_index": 21, "date": 20230621, "phase_id": 1, "session_in_phase": 21, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.9595, "perf_final": 0.931, "l_perf_final": 1.0, "r_perf_final": 0.7987, "rt_median": 0.14396, "rt_impulsive_frac": 0.61, "days_to_next_switch": 38.976395, "progress_to_switch": 0.9091, "sessions_since_switch": 20.0, "switch_imminent": 0.0, "n_trials": 383, "engage_rate": 0.915, "switch_perf_drop": NaN, "perf_asymmetry": 0.2013, "animal_weight": 24.6}, {"day_index": 22, "date": 20230622, "phase_id": 1, "session_in_phase": 22, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.9522, "perf_final": 0.948, "l_perf_final": 0.961, "r_perf_final": 1.0, "rt_median": 0.2042, "rt_impulsive_frac": 0.742, "days_to_next_switch": 38.1567, "progress_to_switch": 0.9545, "sessions_since_switch": 21.0, "switch_imminent": 0.0, "n_trials": 356, "engage_rate": 0.936, "switch_perf_drop": NaN, "perf_asymmetry": -0.039, "animal_weight": 24.3}, {"day_index": 23, "date": 20230623, "phase_id": 2, "session_in_phase": 1, "n_modality_switches": 1, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.2524, "perf_final": 0.1886, "l_perf_final": 0.2385, "r_perf_final": 0.1628, "rt_median": 0.15374, "rt_impulsive_frac": 0.744, "days_to_next_switch": 35.97204, "progress_to_switch": 0.0, "sessions_since_switch": 0.0, "switch_imminent": 0.0, "n_trials": 500, "engage_rate": 0.924, "switch_perf_drop": 0.2154, "perf_asymmetry": 0.0758, "animal_weight": 23.1}, {"day_index": 24, "date": 20230624, "phase_id": 2, "session_in_phase": 2, "n_modality_switches": 0, "session_start_mod": "Audio", "session_end_mod": "Audio", "last_block_perf": 0.1759, "perf_final": 0.2656, "l_perf_final": 0.1548, "r_perf_final": 0.3113, "rt_median": 0.11854, "rt_impulsive_frac": 0.689, "days_to_next_switch": 34.781063, "progress_to_switch": 0.125, "sessions_since_switch": 1.0, "switch_imminent": 0.0, "n_trials": 365, "engage_rate": 0.931, "switch_perf_drop": NaN, "perf_asymmetry": -0.1565, "animal_weight": 24.1}, {"day_index": 25, "date": 20230625, "phase_id": 2, "session_in_phase": 3, "n_modality_switches": 0, "session_start_mod": "Audio", "session_end_mod": "Audio", "last_block_perf": 0.2686, "perf_final": 0.3219, "l_perf_final": 0.2486, "r_perf_final": 0.471, "rt_median": 0.13676, "rt_impulsive_frac": 0.728, "days_to_next_switch": 30.795763, "progress_to_switch": 0.25, "sessions_since_switch": 2.0, "switch_imminent": 0.0, "n_trials": 604, "engage_rate": 0.943, "switch_perf_drop": NaN, "perf_asymmetry": -0.2224, "animal_weight": 24.3}, {"day_index": 26, "date": 20230626, "phase_id": 2, "session_in_phase": 4, "n_modality_switches": 0, "session_start_mod": "Audio", "session_end_mod": "Audio", "last_block_perf": 0.2364, "perf_final": 0.2516, "l_perf_final": 0.1499, "r_perf_final": 0.3359, "rt_median": 0.15037, "rt_impulsive_frac": 0.637, "days_to_next_switch": 31.76328, "progress_to_switch": 0.375, "sessions_since_switch": 3.0, "switch_imminent": 0.0, "n_trials": 331, "engage_rate": 0.912, "switch_perf_drop": NaN, "perf_asymmetry": -0.186, "animal_weight": 24.1}, {"day_index": 27, "date": 20230627, "phase_id": 2, "session_in_phase": 5, "n_modality_switches": 1, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.4213, "perf_final": 0.3672, "l_perf_final": 0.3468, "r_perf_final": 0.3992, "rt_median": 0.13642, "rt_impulsive_frac": 0.582, "days_to_next_switch": 26.16744, "progress_to_switch": 0.5, "sessions_since_switch": 4.0, "switch_imminent": 0.0, "n_trials": 531, "engage_rate": 0.928, "switch_perf_drop": 0.2802, "perf_asymmetry": -0.0524, "animal_weight": 25.1}, {"day_index": 28, "date": 20230628, "phase_id": 2, "session_in_phase": 6, "n_modality_switches": 0, "session_start_mod": "Audio", "session_end_mod": "Audio", "last_block_perf": 0.5138, "perf_final": 0.4171, "l_perf_final": 0.4515, "r_perf_final": 0.3223, "rt_median": 0.1542, "rt_impulsive_frac": 0.677, "days_to_next_switch": 30.468334, "progress_to_switch": 0.625, "sessions_since_switch": 5.0, "switch_imminent": 0.0, "n_trials": 343, "engage_rate": 0.901, "switch_perf_drop": NaN, "perf_asymmetry": 0.1293, "animal_weight": 24.2}, {"day_index": 29, "date": 20230629, "phase_id": 2, "session_in_phase": 7, "n_modality_switches": 0, "session_start_mod": "Audio", "session_end_mod": "Audio", "last_block_perf": 0.524, "perf_final": 0.4917, "l_perf_final": 0.642, "r_perf_final": 0.3778, "rt_median": 0.11354, "rt_impulsive_frac": 0.679, "days_to_next_switch": 27.611519, "progress_to_switch": 0.75, "sessions_since_switch": 6.0, "switch_imminent": 0.0, "n_trials": 440, "engage_rate": 0.916, "switch_perf_drop": NaN, "perf_asymmetry": 0.2643, "animal_weight": 23.6}, {"day_index": 30, "date": 20230630, "phase_id": 2, "session_in_phase": 8, "n_modality_switches": 1, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.5319, "perf_final": 0.5562, "l_perf_final": 0.4051, "r_perf_final": 0.6832, "rt_median": 0.19599, "rt_impulsive_frac": 0.65, "days_to_next_switch": 24.24135, "progress_to_switch": 0.875, "sessions_since_switch": 7.0, "switch_imminent": 0.0, "n_trials": 555, "engage_rate": 0.936, "switch_perf_drop": 0.2074, "perf_asymmetry": -0.2781, "animal_weight": 23.6}, {"day_index": 31, "date": 20230701, "phase_id": 3, "session_in_phase": 1, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.2245, "perf_final": 0.1893, "l_perf_final": 0.1831, "r_perf_final": 0.2402, "rt_median": 0.12068, "rt_impulsive_frac": 0.691, "days_to_next_switch": 27.710192, "progress_to_switch": 0.0, "sessions_since_switch": 0.0, "switch_imminent": 0.0, "n_trials": 510, "engage_rate": 0.927, "switch_perf_drop": NaN, "perf_asymmetry": -0.0571, "animal_weight": 24.4}, {"day_index": 32, "date": 20230702, "phase_id": 3, "session_in_phase": 2, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.2835, "perf_final": 0.2583, "l_perf_final": 0.2058, "r_perf_final": 0.3464, "rt_median": 0.18816, "rt_impulsive_frac": 0.699, "days_to_next_switch": 27.405571, "progress_to_switch": 0.125, "sessions_since_switch": 1.0, "switch_imminent": 0.0, "n_trials": 413, "engage_rate": 0.91, "switch_perf_drop": NaN, "perf_asymmetry": -0.1406, "animal_weight": 23.7}, {"day_index": 33, "date": 20230703, "phase_id": 3, "session_in_phase": 3, "n_modality_switches": 1, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.2754, "perf_final": 0.3332, "l_perf_final": 0.4464, "r_perf_final": 0.1718, "rt_median": 0.09186, "rt_impulsive_frac": 0.723, "days_to_next_switch": 20.83138, "progress_to_switch": 0.25, "sessions_since_switch": 2.0, "switch_imminent": 0.0, "n_trials": 600, "engage_rate": 0.947, "switch_perf_drop": 0.2326, "perf_asymmetry": 0.2745, "animal_weight": 24.0}, {"day_index": 34, "date": 20230704, "phase_id": 3, "session_in_phase": 4, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.148, "perf_final": 0.2848, "l_perf_final": 0.3383, "r_perf_final": 0.1977, "rt_median": 0.1586, "rt_impulsive_frac": 0.767, "days_to_next_switch": 23.930157, "progress_to_switch": 0.375, "sessions_since_switch": 3.0, "switch_imminent": 0.0, "n_trials": 463, "engage_rate": 0.926, "switch_perf_drop": NaN, "perf_asymmetry": 0.1406, "animal_weight": 22.4}, {"day_index": 35, "date": 20230705, "phase_id": 3, "session_in_phase": 5, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.3188, "perf_final": 0.3129, "l_perf_final": 0.271, "r_perf_final": 0.3598, "rt_median": 0.09664, "rt_impulsive_frac": 0.763, "days_to_next_switch": 23.315313, "progress_to_switch": 0.5, "sessions_since_switch": 4.0, "switch_imminent": 0.0, "n_trials": 406, "engage_rate": 0.919, "switch_perf_drop": NaN, "perf_asymmetry": -0.0888, "animal_weight": 22.9}, {"day_index": 36, "date": 20230706, "phase_id": 3, "session_in_phase": 6, "n_modality_switches": 1, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.452, "perf_final": 0.4854, "l_perf_final": 0.3691, "r_perf_final": 0.5585, "rt_median": 0.13332, "rt_impulsive_frac": 0.78, "days_to_next_switch": 19.2772, "progress_to_switch": 0.625, "sessions_since_switch": 5.0, "switch_imminent": 0.0, "n_trials": 420, "engage_rate": 0.913, "switch_perf_drop": 0.1275, "perf_asymmetry": -0.1894, "animal_weight": 25.6}, {"day_index": 37, "date": 20230707, "phase_id": 3, "session_in_phase": 7, "n_modality_switches": 1, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.444, "perf_final": 0.519, "l_perf_final": 0.4974, "r_perf_final": 0.5036, "rt_median": 0.11456, "rt_impulsive_frac": 0.677, "days_to_next_switch": 17.647163, "progress_to_switch": 0.75, "sessions_since_switch": 6.0, "switch_imminent": 0.0, "n_trials": 671, "engage_rate": 0.949, "switch_perf_drop": 0.2458, "perf_asymmetry": -0.0062, "animal_weight": 24.1}, {"day_index": 38, "date": 20230708, "phase_id": 3, "session_in_phase": 8, "n_modality_switches": 0, "session_start_mod": "Vision", "session_end_mod": "Vision", "last_block_perf": 0.5405, "perf_final": 0.5646, "l_perf_final": 0.5555, "r_perf_final": 0.5397, "rt_median": 0.13357, "rt_impulsive_frac": 0.803, "days_to_next_switch": 20.169846, "progress_to_switch": 0.875, "sessions_since_switch": 7.0, "switch_imminent": 0.0, "n_trials": 602, "engage_rate": 0.916, "switch_perf_drop": NaN, "perf_asymmetry": 0.0159, "animal_weight": 25.1}, {"day_index": 39, "date": 20230709, "phase_id": 4, "session_in_phase": 1, "n_modality_switches": 0, "session_start_mod": "Audio", "session_end_mod": "Audio", "last_block_perf": 0.2478, "perf_final": 0.2673, "l_perf_final": 0.1373, "r_perf_final": 0.3634, "rt_median": 0.10734, "rt_impulsive_frac": 0.728, "days_to_next_switch": 21.789608, "progress_to_switch": 0.0, "sessions_since_switch": 0.0, "switch_imminent": 0.0, "n_trials": 301, "engage_rate": 0.913, "switch_perf_drop": NaN, "perf_asymmetry": -0.226, "animal_weight": 22.8}, {"day_index": 40, "date": 20230710, "phase_id": 4, "session_in_phase": 2, "n_modality_switches": 1, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.2887, "perf_final": 0.2487, "l_perf_final": 0.1481, "r_perf_final": 0.3721, "rt_median": 0.08441, "rt_impulsive_frac": 0.652, "days_to_next_switch": 18.344795, "progress_to_switch": 0.1667, "sessions_since_switch": 1.0, "switch_imminent": 0.0, "n_trials": 449, "engage_rate": 0.912, "switch_perf_drop": 0.2927, "perf_asymmetry": -0.224, "animal_weight": 23.2}, {"day_index": 41, "date": 20230711, "phase_id": 4, "session_in_phase": 3, "n_modality_switches": 1, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.2207, "perf_final": 0.291, "l_perf_final": 0.4108, "r_perf_final": 0.2064, "rt_median": 0.09889, "rt_impulsive_frac": 0.677, "days_to_next_switch": 18.12907, "progress_to_switch": 0.3333, "sessions_since_switch": 2.0, "switch_imminent": 0.0, "n_trials": 657, "engage_rate": 0.922, "switch_perf_drop": 0.2028, "perf_asymmetry": 0.2044, "animal_weight": 25.0}, {"day_index": 42, "date": 20230712, "phase_id": 4, "session_in_phase": 4, "n_modality_switches": 1, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.3456, "perf_final": 0.3414, "l_perf_final": 0.5357, "r_perf_final": 0.2022, "rt_median": 0.09357, "rt_impulsive_frac": 0.729, "days_to_next_switch": 16.388514, "progress_to_switch": 0.5, "sessions_since_switch": 3.0, "switch_imminent": 0.0, "n_trials": 378, "engage_rate": 0.929, "switch_perf_drop": 0.2553, "perf_asymmetry": 0.3335, "animal_weight": 24.0}, {"day_index": 43, "date": 20230713, "phase_id": 4, "session_in_phase": 5, "n_modality_switches": 1, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.4229, "perf_final": 0.396, "l_perf_final": 0.4, "r_perf_final": 0.3873, "rt_median": 0.11727, "rt_impulsive_frac": 0.615, "days_to_next_switch": 16.089985, "progress_to_switch": 0.6667, "sessions_since_switch": 4.0, "switch_imminent": 0.0, "n_trials": 355, "engage_rate": 0.922, "switch_perf_drop": 0.2026, "perf_asymmetry": 0.0127, "animal_weight": 25.0}, {"day_index": 44, "date": 20230714, "phase_id": 4, "session_in_phase": 6, "n_modality_switches": 2, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.362, "perf_final": 0.3911, "l_perf_final": 0.4824, "r_perf_final": 0.2435, "rt_median": 0.14264, "rt_impulsive_frac": 0.776, "days_to_next_switch": 16.230549, "progress_to_switch": 0.8333, "sessions_since_switch": 5.0, "switch_imminent": 0.0, "n_trials": 358, "engage_rate": 0.91, "switch_perf_drop": 0.3174, "perf_asymmetry": 0.2389, "animal_weight": 23.3}, {"day_index": 45, "date": 20230715, "phase_id": 5, "session_in_phase": 1, "n_modality_switches": 1, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.191, "perf_final": 0.1632, "l_perf_final": 0.1392, "r_perf_final": 0.1324, "rt_median": 0.12223, "rt_impulsive_frac": 0.763, "days_to_next_switch": 17.263348, "progress_to_switch": 0.0, "sessions_since_switch": 0.0, "switch_imminent": 0.0, "n_trials": 334, "engage_rate": 0.908, "switch_perf_drop": 0.1926, "perf_asymmetry": 0.0068, "animal_weight": 24.9}, {"day_index": 46, "date": 20230716, "phase_id": 5, "session_in_phase": 2, "n_modality_switches": 2, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.2903, "perf_final": 0.2523, "l_perf_final": 0.2263, "r_perf_final": 0.2546, "rt_median": 0.10324, "rt_impulsive_frac": 0.803, "days_to_next_switch": 14.3831625, "progress_to_switch": 0.1667, "sessions_since_switch": 1.0, "switch_imminent": 0.0, "n_trials": 644, "engage_rate": 0.917, "switch_perf_drop": 0.2331, "perf_asymmetry": -0.0283, "animal_weight": 25.6}, {"day_index": 47, "date": 20230717, "phase_id": 5, "session_in_phase": 3, "n_modality_switches": 1, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.3137, "perf_final": 0.3115, "l_perf_final": 0.2609, "r_perf_final": 0.288, "rt_median": 0.06615, "rt_impulsive_frac": 0.781, "days_to_next_switch": 11.085214, "progress_to_switch": 0.3333, "sessions_since_switch": 2.0, "switch_imminent": 0.0, "n_trials": 572, "engage_rate": 0.93, "switch_perf_drop": 0.1976, "perf_asymmetry": -0.0271, "animal_weight": 23.0}, {"day_index": 48, "date": 20230718, "phase_id": 5, "session_in_phase": 4, "n_modality_switches": 2, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.3324, "perf_final": 0.3258, "l_perf_final": 0.442, "r_perf_final": 0.1856, "rt_median": 0.10394, "rt_impulsive_frac": 0.852, "days_to_next_switch": 9.602823, "progress_to_switch": 0.5, "sessions_since_switch": 3.0, "switch_imminent": 0.0, "n_trials": 651, "engage_rate": 0.938, "switch_perf_drop": 0.3922, "perf_asymmetry": 0.2564, "animal_weight": 25.1}, {"day_index": 49, "date": 20230719, "phase_id": 5, "session_in_phase": 5, "n_modality_switches": 2, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.4374, "perf_final": 0.3582, "l_perf_final": 0.2774, "r_perf_final": 0.3638, "rt_median": 0.11088, "rt_impulsive_frac": 0.823, "days_to_next_switch": 9.669295, "progress_to_switch": 0.6667, "sessions_since_switch": 4.0, "switch_imminent": 0.0, "n_trials": 410, "engage_rate": 0.947, "switch_perf_drop": 0.3636, "perf_asymmetry": -0.0864, "animal_weight": 26.0}, {"day_index": 50, "date": 20230720, "phase_id": 5, "session_in_phase": 6, "n_modality_switches": 1, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.5459, "perf_final": 0.5091, "l_perf_final": 0.6066, "r_perf_final": 0.478, "rt_median": 0.12732, "rt_impulsive_frac": 0.769, "days_to_next_switch": 11.407808, "progress_to_switch": 0.8333, "sessions_since_switch": 5.0, "switch_imminent": 0.0, "n_trials": 336, "engage_rate": 0.932, "switch_perf_drop": 0.242, "perf_asymmetry": 0.1287, "animal_weight": 22.3}, {"day_index": 51, "date": 20230721, "phase_id": 6, "session_in_phase": 1, "n_modality_switches": 1, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.2067, "perf_final": 0.2229, "l_perf_final": 0.0506, "r_perf_final": 0.3657, "rt_median": 0.09946, "rt_impulsive_frac": 0.674, "days_to_next_switch": 13.229301, "progress_to_switch": 0.0, "sessions_since_switch": 0.0, "switch_imminent": 0.0, "n_trials": 310, "engage_rate": 0.907, "switch_perf_drop": 0.3081, "perf_asymmetry": -0.3151, "animal_weight": 22.8}, {"day_index": 52, "date": 20230722, "phase_id": 6, "session_in_phase": 2, "n_modality_switches": 2, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.2591, "perf_final": 0.248, "l_perf_final": 0.1123, "r_perf_final": 0.4028, "rt_median": 0.12223, "rt_impulsive_frac": 0.917, "days_to_next_switch": 11.861341, "progress_to_switch": 0.2, "sessions_since_switch": 1.0, "switch_imminent": 0.0, "n_trials": 345, "engage_rate": 0.917, "switch_perf_drop": 0.2652, "perf_asymmetry": -0.2905, "animal_weight": 22.1}, {"day_index": 53, "date": 20230723, "phase_id": 6, "session_in_phase": 3, "n_modality_switches": 2, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.2755, "perf_final": 0.2806, "l_perf_final": 0.2538, "r_perf_final": 0.2466, "rt_median": 0.08019, "rt_impulsive_frac": 0.874, "days_to_next_switch": 11.063834, "progress_to_switch": 0.4, "sessions_since_switch": 2.0, "switch_imminent": 0.0, "n_trials": 359, "engage_rate": 0.936, "switch_perf_drop": 0.2401, "perf_asymmetry": 0.0072, "animal_weight": 25.7}, {"day_index": 54, "date": 20230724, "phase_id": 6, "session_in_phase": 4, "n_modality_switches": 1, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.3138, "perf_final": 0.3773, "l_perf_final": 0.3662, "r_perf_final": 0.3238, "rt_median": 0.12843, "rt_impulsive_frac": 0.732, "days_to_next_switch": 8.952107, "progress_to_switch": 0.6, "sessions_since_switch": 3.0, "switch_imminent": 0.0, "n_trials": 381, "engage_rate": 0.941, "switch_perf_drop": 0.2346, "perf_asymmetry": 0.0424, "animal_weight": 24.5}, {"day_index": 55, "date": 20230725, "phase_id": 6, "session_in_phase": 5, "n_modality_switches": 2, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.4019, "perf_final": 0.355, "l_perf_final": 0.4594, "r_perf_final": 0.288, "rt_median": 0.10558, "rt_impulsive_frac": 0.832, "days_to_next_switch": 8.148988, "progress_to_switch": 0.8, "sessions_since_switch": 4.0, "switch_imminent": 0.0, "n_trials": 323, "engage_rate": 0.903, "switch_perf_drop": 0.1968, "perf_asymmetry": 0.1714, "animal_weight": 22.4}, {"day_index": 56, "date": 20230726, "phase_id": 7, "session_in_phase": 1, "n_modality_switches": 1, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.2312, "perf_final": 0.256, "l_perf_final": 0.1976, "r_perf_final": 0.3297, "rt_median": 0.09741, "rt_impulsive_frac": 0.847, "days_to_next_switch": 5.7407036, "progress_to_switch": 0.0, "sessions_since_switch": 0.0, "switch_imminent": 0.0, "n_trials": 523, "engage_rate": 0.934, "switch_perf_drop": 0.2043, "perf_asymmetry": -0.1321, "animal_weight": 25.0}, {"day_index": 57, "date": 20230727, "phase_id": 7, "session_in_phase": 2, "n_modality_switches": 1, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.335, "perf_final": 0.2428, "l_perf_final": 0.3607, "r_perf_final": 0.1643, "rt_median": 0.10665, "rt_impulsive_frac": 0.744, "days_to_next_switch": 5.184755, "progress_to_switch": 0.2, "sessions_since_switch": 1.0, "switch_imminent": 0.0, "n_trials": 339, "engage_rate": 0.921, "switch_perf_drop": 0.3122, "perf_asymmetry": 0.1964, "animal_weight": 23.5}, {"day_index": 58, "date": 20230728, "phase_id": 7, "session_in_phase": 3, "n_modality_switches": 1, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.3789, "perf_final": 0.3281, "l_perf_final": 0.2145, "r_perf_final": 0.3661, "rt_median": 0.09872, "rt_impulsive_frac": 0.754, "days_to_next_switch": 5.852879, "progress_to_switch": 0.4, "sessions_since_switch": 2.0, "switch_imminent": 0.0, "n_trials": 402, "engage_rate": 0.941, "switch_perf_drop": 0.2358, "perf_asymmetry": -0.1516, "animal_weight": 25.4}, {"day_index": 59, "date": 20230729, "phase_id": 7, "session_in_phase": 4, "n_modality_switches": 2, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.2744, "perf_final": 0.3635, "l_perf_final": 0.3597, "r_perf_final": 0.4163, "rt_median": 0.09992, "rt_impulsive_frac": 0.837, "days_to_next_switch": 0.2425955, "progress_to_switch": 0.6, "sessions_since_switch": 3.0, "switch_imminent": 1.0, "n_trials": 538, "engage_rate": 0.931, "switch_perf_drop": 0.3237, "perf_asymmetry": -0.0565, "animal_weight": 22.3}, {"day_index": 60, "date": 20230730, "phase_id": 7, "session_in_phase": 5, "n_modality_switches": 4, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.3975, "perf_final": 0.4291, "l_perf_final": 0.4454, "r_perf_final": 0.4017, "rt_median": 0.10006, "rt_impulsive_frac": 0.799, "days_to_next_switch": 1.6286496, "progress_to_switch": 0.8, "sessions_since_switch": 4.0, "switch_imminent": 0.0, "n_trials": 631, "engage_rate": 0.948, "switch_perf_drop": 0.1035, "perf_asymmetry": 0.0438, "animal_weight": 23.8}, {"day_index": 61, "date": 20230731, "phase_id": 8, "session_in_phase": 1, "n_modality_switches": 2, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.1739, "perf_final": 0.2415, "l_perf_final": 0.408, "r_perf_final": 0.0895, "rt_median": 0.09774, "rt_impulsive_frac": 0.806, "days_to_next_switch": 6.9087296, "progress_to_switch": 0.0, "sessions_since_switch": 0.0, "switch_imminent": 0.0, "n_trials": 348, "engage_rate": 0.908, "switch_perf_drop": 0.2276, "perf_asymmetry": 0.3185, "animal_weight": 23.4}, {"day_index": 62, "date": 20230801, "phase_id": 8, "session_in_phase": 2, "n_modality_switches": 2, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.3398, "perf_final": 0.2512, "l_perf_final": 0.1345, "r_perf_final": 0.3505, "rt_median": 0.07574, "rt_impulsive_frac": 0.858, "days_to_next_switch": 5.9205565, "progress_to_switch": 0.25, "sessions_since_switch": 1.0, "switch_imminent": 0.0, "n_trials": 334, "engage_rate": 0.94, "switch_perf_drop": 0.2106, "perf_asymmetry": -0.216, "animal_weight": 22.8}, {"day_index": 63, "date": 20230802, "phase_id": 8, "session_in_phase": 3, "n_modality_switches": 2, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.2273, "perf_final": 0.2784, "l_perf_final": 0.2667, "r_perf_final": 0.2809, "rt_median": 0.11556, "rt_impulsive_frac": 0.781, "days_to_next_switch": 2.7231288, "progress_to_switch": 0.5, "sessions_since_switch": 2.0, "switch_imminent": 0.0, "n_trials": 535, "engage_rate": 0.931, "switch_perf_drop": 0.2671, "perf_asymmetry": -0.0142, "animal_weight": 24.0}, {"day_index": 64, "date": 20230803, "phase_id": 8, "session_in_phase": 4, "n_modality_switches": 2, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.3169, "perf_final": 0.3568, "l_perf_final": 0.2491, "r_perf_final": 0.3384, "rt_median": 0.10968, "rt_impulsive_frac": 0.946, "days_to_next_switch": 1.9524918, "progress_to_switch": 0.75, "sessions_since_switch": 3.0, "switch_imminent": 0.0, "n_trials": 493, "engage_rate": 0.939, "switch_perf_drop": 0.3304, "perf_asymmetry": -0.0892, "animal_weight": 23.4}, {"day_index": 65, "date": 20230804, "phase_id": 9, "session_in_phase": 1, "n_modality_switches": 4, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.2785, "perf_final": 0.2192, "l_perf_final": 0.249, "r_perf_final": 0.142, "rt_median": 0.09556, "rt_impulsive_frac": 0.856, "days_to_next_switch": 4.039745, "progress_to_switch": 0.0, "sessions_since_switch": 0.0, "switch_imminent": 0.0, "n_trials": 486, "engage_rate": 0.939, "switch_perf_drop": 0.3155, "perf_asymmetry": 0.107, "animal_weight": 25.5}, {"day_index": 66, "date": 20230805, "phase_id": 9, "session_in_phase": 2, "n_modality_switches": 2, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.2713, "perf_final": 0.2606, "l_perf_final": 0.1895, "r_perf_final": 0.3169, "rt_median": 0.09208, "rt_impulsive_frac": 0.861, "days_to_next_switch": 2.893111, "progress_to_switch": 0.25, "sessions_since_switch": 1.0, "switch_imminent": 0.0, "n_trials": 569, "engage_rate": 0.922, "switch_perf_drop": 0.2326, "perf_asymmetry": -0.1274, "animal_weight": 25.0}, {"day_index": 67, "date": 20230806, "phase_id": 9, "session_in_phase": 3, "n_modality_switches": 4, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.2552, "perf_final": 0.3751, "l_perf_final": 0.3089, "r_perf_final": 0.4597, "rt_median": 0.10261, "rt_impulsive_frac": 0.869, "days_to_next_switch": 4.0140867, "progress_to_switch": 0.5, "sessions_since_switch": 2.0, "switch_imminent": 0.0, "n_trials": 322, "engage_rate": 0.925, "switch_perf_drop": 0.189, "perf_asymmetry": -0.1507, "animal_weight": 24.3}, {"day_index": 68, "date": 20230807, "phase_id": 9, "session_in_phase": 4, "n_modality_switches": 3, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.3308, "perf_final": 0.3866, "l_perf_final": 0.2404, "r_perf_final": 0.5265, "rt_median": 0.05017, "rt_impulsive_frac": 0.772, "days_to_next_switch": 0.825119, "progress_to_switch": 0.75, "sessions_since_switch": 3.0, "switch_imminent": 1.0, "n_trials": 617, "engage_rate": 0.934, "switch_perf_drop": 0.3085, "perf_asymmetry": -0.2861, "animal_weight": 22.8}, {"day_index": 69, "date": 20230808, "phase_id": 10, "session_in_phase": 1, "n_modality_switches": 2, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.1868, "perf_final": 0.2357, "l_perf_final": 0.325, "r_perf_final": 0.1304, "rt_median": 0.08598, "rt_impulsive_frac": 0.732, "days_to_next_switch": 4.9337544, "progress_to_switch": 0.0, "sessions_since_switch": 0.0, "switch_imminent": 0.0, "n_trials": 664, "engage_rate": 0.902, "switch_perf_drop": 0.2626, "perf_asymmetry": 0.1946, "animal_weight": 22.8}, {"day_index": 70, "date": 20230809, "phase_id": 10, "session_in_phase": 2, "n_modality_switches": 4, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.2979, "perf_final": 0.2413, "l_perf_final": 0.1144, "r_perf_final": 0.316, "rt_median": 0.04, "rt_impulsive_frac": 0.774, "days_to_next_switch": 4.8392143, "progress_to_switch": 0.3333, "sessions_since_switch": 1.0, "switch_imminent": 0.0, "n_trials": 607, "engage_rate": 0.926, "switch_perf_drop": 0.2432, "perf_asymmetry": -0.2015, "animal_weight": 23.9}, {"day_index": 71, "date": 20230810, "phase_id": 10, "session_in_phase": 3, "n_modality_switches": 2, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.3003, "perf_final": 0.3155, "l_perf_final": 0.3978, "r_perf_final": 0.2151, "rt_median": 0.08757, "rt_impulsive_frac": 0.927, "days_to_next_switch": 4.3212357, "progress_to_switch": 0.6667, "sessions_since_switch": 2.0, "switch_imminent": 0.0, "n_trials": 308, "engage_rate": 0.93, "switch_perf_drop": 0.2448, "perf_asymmetry": 0.1826, "animal_weight": 25.5}, {"day_index": 72, "date": 20230811, "phase_id": 11, "session_in_phase": 1, "n_modality_switches": 2, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.0502, "perf_final": 0.1561, "l_perf_final": 0.2336, "r_perf_final": 0.0866, "rt_median": 0.10286, "rt_impulsive_frac": 0.913, "days_to_next_switch": 4.5290475, "progress_to_switch": 0.0, "sessions_since_switch": 0.0, "switch_imminent": 0.0, "n_trials": 535, "engage_rate": 0.924, "switch_perf_drop": 0.2788, "perf_asymmetry": 0.147, "animal_weight": 24.7}, {"day_index": 73, "date": 20230812, "phase_id": 11, "session_in_phase": 2, "n_modality_switches": 3, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.2457, "perf_final": 0.238, "l_perf_final": 0.1562, "r_perf_final": 0.2786, "rt_median": 0.0956, "rt_impulsive_frac": 0.771, "days_to_next_switch": 0.6117972, "progress_to_switch": 0.3333, "sessions_since_switch": 1.0, "switch_imminent": 1.0, "n_trials": 435, "engage_rate": 0.926, "switch_perf_drop": 0.3766, "perf_asymmetry": -0.1224, "animal_weight": 24.6}, {"day_index": 74, "date": 20230813, "phase_id": 11, "session_in_phase": 3, "n_modality_switches": 4, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.2277, "perf_final": 0.2661, "l_perf_final": 0.1514, "r_perf_final": 0.3339, "rt_median": 0.10456, "rt_impulsive_frac": 0.767, "days_to_next_switch": 5.440075, "progress_to_switch": 0.6667, "sessions_since_switch": 2.0, "switch_imminent": 0.0, "n_trials": 309, "engage_rate": 0.948, "switch_perf_drop": 0.2961, "perf_asymmetry": -0.1825, "animal_weight": 25.8}, {"day_index": 75, "date": 20230814, "phase_id": 12, "session_in_phase": 1, "n_modality_switches": 4, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.1579, "perf_final": 0.1851, "l_perf_final": 0.1561, "r_perf_final": 0.1516, "rt_median": 0.1175, "rt_impulsive_frac": 0.822, "days_to_next_switch": 6.6383476, "progress_to_switch": 0.0, "sessions_since_switch": 0.0, "switch_imminent": 0.0, "n_trials": 306, "engage_rate": 0.909, "switch_perf_drop": 0.2065, "perf_asymmetry": 0.0045, "animal_weight": 22.3}, {"day_index": 76, "date": 20230815, "phase_id": 12, "session_in_phase": 2, "n_modality_switches": 3, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.2495, "perf_final": 0.2513, "l_perf_final": 0.2776, "r_perf_final": 0.2284, "rt_median": 0.07711, "rt_impulsive_frac": 0.873, "days_to_next_switch": 4.8495517, "progress_to_switch": 0.3333, "sessions_since_switch": 1.0, "switch_imminent": 0.0, "n_trials": 614, "engage_rate": 0.928, "switch_perf_drop": 0.3157, "perf_asymmetry": 0.0492, "animal_weight": 22.9}, {"day_index": 77, "date": 20230816, "phase_id": 12, "session_in_phase": 3, "n_modality_switches": 4, "session_start_mod": "Audio", "session_end_mod": "Vision", "last_block_perf": 0.3019, "perf_final": 0.2642, "l_perf_final": 0.3674, "r_perf_final": 0.1243, "rt_median": 0.10042, "rt_impulsive_frac": 0.844, "days_to_next_switch": 4.9615316, "progress_to_switch": 0.6667, "sessions_since_switch": 2.0, "switch_imminent": 0.0, "n_trials": 358, "engage_rate": 0.943, "switch_perf_drop": 0.1879, "perf_asymmetry": 0.2432, "animal_weight": 25.0}, {"day_index": 78, "date": 20230817, "phase_id": 13, "session_in_phase": 1, "n_modality_switches": 3, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.0858, "perf_final": 0.1531, "l_perf_final": 0.1979, "r_perf_final": 0.0768, "rt_median": 0.08219, "rt_impulsive_frac": 0.768, "days_to_next_switch": 5.5754123, "progress_to_switch": 0.0, "sessions_since_switch": 0.0, "switch_imminent": 0.0, "n_trials": 489, "engage_rate": 0.924, "switch_perf_drop": 0.2534, "perf_asymmetry": 0.1211, "animal_weight": 24.3}, {"day_index": 79, "date": 20230818, "phase_id": 13, "session_in_phase": 2, "n_modality_switches": 2, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.2232, "perf_final": 0.2415, "l_perf_final": 0.3605, "r_perf_final": 0.108, "rt_median": 0.08638, "rt_impulsive_frac": 0.887, "days_to_next_switch": 5.8679595, "progress_to_switch": 0.3333, "sessions_since_switch": 1.0, "switch_imminent": 0.0, "n_trials": 358, "engage_rate": 0.905, "switch_perf_drop": 0.2331, "perf_asymmetry": 0.2525, "animal_weight": 25.4}, {"day_index": 80, "date": 20230819, "phase_id": 13, "session_in_phase": 3, "n_modality_switches": 2, "session_start_mod": "Vision", "session_end_mod": "Audio", "last_block_perf": 0.4195, "perf_final": 0.3259, "l_perf_final": 0.3081, "r_perf_final": 0.3376, "rt_median": 0.09432, "rt_impulsive_frac": 0.789, "days_to_next_switch": 5.9015203, "progress_to_switch": 0.6667, "sessions_since_switch": 2.0, "switch_imminent": 0.0, "n_trials": 377, "engage_rate": 0.91, "switch_perf_drop": 0.235, "perf_asymmetry": -0.0295, "animal_weight": 22.9}];
+// Compute 5-session rolling average in JS
+GR011.forEach((r, i) => {
+  const win = GR011.slice(Math.max(0, i - 4), i + 1)
+    .map(x => x.last_block_perf).filter(v => v != null);
+  r.last_block_perf_roll5 = win.reduce((a, b) => a + b, 0) / win.length;
+});
+// Compute 5-session rolling average in JS
+GR011.forEach((r, i) => {
+  const win = GR011.slice(Math.max(0, i - 4), i + 1)
+    .map(x => x.last_block_perf).filter(v => v != null);
+  r.last_block_perf_roll5 = win.reduce((a, b) => a + b, 0) / win.length;
+});
+// Compute 5-session rolling average in JS
+GR011.forEach((r, i) => {
+  const win = GR011.slice(Math.max(0, i - 4), i + 1)
+    .map(x => x.last_block_perf).filter(v => v != null);
+  r.last_block_perf_roll5 = win.reduce((a, b) => a + b, 0) / win.length;
+});
+
+// Compute 5-session rolling average in JS
+GR011.forEach((r, i) => {
+  const win = GR011.slice(Math.max(0, i - 4), i + 1)
+    .map(x => x.last_block_perf).filter(v => v != null);
+  r.last_block_perf_roll5 = win.reduce((a, b) => a + b, 0) / win.length;
+});
+
+const GR010_SUMMARY = {
+  sessions:135, phases:28, finalPerf:0.66, lastMod:'Vision',
+  lastSwitch:1, phase:28, sip:1, dtn:0, prog:1.0, rt:0.165,
+  trials:540, engage:0.95, done:true
+};
+
+let currentMouse = 'GR011';
+let currentData  = GR011;
+
+const tt = document.getElementById('tt');
+function showTT(e, head, rows) {
+  document.getElementById('tt-head').textContent = head;
+  document.getElementById('tt-body').innerHTML = rows.map(r =>
+    `<div class="tt-row"><span class="tt-k">${r[0]}</span><span class="tt-v">${r[1]??'—'}</span></div>`
+  ).join('');
+  tt.style.left = (e.clientX+12)+'px';
+  tt.style.top  = (e.clientY-8)+'px';
+  tt.classList.add('show');
+}
+function hideTT(){ tt.classList.remove('show'); }
+function fmtDate(s){ const str=String(s); return str.length===8?str.replace(/(\d{4})(\d{2})(\d{2})/,'$1-$2-$3'):str; }
+
+function selectMouse(id, event) {
+  currentMouse = id;
+  document.querySelectorAll('.mouse-chip').forEach(c=>c.classList.remove('active'));
+  event.target.classList.add('active');
+  currentData = (id === 'GR011') ? GR011 : null;
+  render();
+}
+
+function render() {
+  if (!currentData) { renderGR010Summary(); return; }
+  const D = currentData;
+  const last = D[D.length-1];
+
+  const avgPerf = D.reduce((s,r)=>s+(r.last_block_perf||0),0)/D.length;
+
+  document.getElementById('stat-row').innerHTML = `
+    <div class="stat-card"><div class="label">Sessions</div><div class="value val-blue">${D.length}</div><div class="sub">training days</div></div>
+    <div class="stat-card"><div class="label">Avg performance</div><div class="value val-green">${(avgPerf*100).toFixed(0)}%</div><div class="sub">per phase avg</div></div>
+    <div class="stat-card"><div class="label">Days to switch</div><div class="value val-orange">${last.days_to_next_switch!=null?last.days_to_next_switch.toFixed(1):'?'}</div><div class="sub">model prediction (GR010)</div></div>
+  `;
+
+  drawPerfChart(D);
+}
+
+function renderGR010Summary() {
+  const S = GR010_SUMMARY;
+  const avgPerfPct = (S.finalPerf*100).toFixed(0);
+  document.getElementById('stat-row').innerHTML = `
+    <div class="stat-card"><div class="label">Sessions</div><div class="value val-blue">${S.sessions}</div><div class="sub">training days</div></div>
+    <div class="stat-card"><div class="label">Final performance</div><div class="value val-green">${avgPerfPct}%</div><div class="sub">per phase avg</div></div>
+    <div class="stat-card"><div class="label">Days to switch</div><div class="value val-orange">—</div><div class="sub">training complete</div></div>
+  `;
+  const canvas = document.getElementById('c-perf');
+  canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
+}
+
+function setupCanvas(id) {
+  const canvas = document.getElementById(id);
+  const dpr = window.devicePixelRatio||1;
+  const w = canvas.parentElement.offsetWidth - 48;
+  const h = parseInt(canvas.getAttribute('height'));
+  canvas.width  = w*dpr; canvas.height = h*dpr;
+  canvas.style.width=w+'px'; canvas.style.height=h+'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  return {ctx,w,h};
+}
+function pad(w,h){return{x0:52,y0:16,x1:w-16,y1:h-32,pw:w-68,ph:h-48}}
+function mx(d,days,a){const mn=days[0],mx2=days[days.length-1];return a.x0+(d-mn)/(mx2-mn)*a.pw}
+function my(v,mn,mx2,a){return a.y1-(v-mn)/(mx2-mn)*a.ph}
+function drawAxes(ctx,a,yTicks,yMax,days,D){
+  ctx.font='10px DM Mono,monospace';
+  ctx.fillStyle='#7a7468';
+  yTicks.forEach(v=>{
+    const y=my(v,0,yMax,a);
+    ctx.textAlign='right';
+    ctx.fillText(typeof v==='number'&&v<2?(v*100).toFixed(0)+'%':v,a.x0-6,y+3);
+    ctx.strokeStyle='#e8e4dc';ctx.lineWidth=0.5;
+    ctx.beginPath();ctx.moveTo(a.x0,y);ctx.lineTo(a.x1,y);ctx.stroke();
+  });
+  const step=Math.ceil(D.length/8);
+  ctx.textAlign='center';
+  D.forEach((r,i)=>{
+    if(i%step===0){
+      const x=mx(r.day_index,days,a);
+      ctx.fillText('D'+r.day_index,x,a.y1+16);
+    }
+  });
+  ctx.strokeStyle='#d4cfc4';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(a.x0,a.y0);ctx.lineTo(a.x0,a.y1);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(a.x0,a.y1);ctx.lineTo(a.x1,a.y1);ctx.stroke();
+}
+function drawPhases(ctx,a,days,D){
+  let lastP=D[0].phase_id;
+  D.forEach((r,i)=>{
+    if(r.phase_id!==lastP){
+      const x=mx(r.day_index,days,a);
+      ctx.strokeStyle='rgba(200,190,170,.4)';ctx.lineWidth=1;
+      ctx.setLineDash([3,3]);
+      ctx.beginPath();ctx.moveTo(x,a.y0);ctx.lineTo(x,a.y1);ctx.stroke();
+      ctx.setLineDash([]);
+      lastP=r.phase_id;
+    }
+  });
+}
+
+function drawPerfChart(D){
+  const {ctx,w,h}=setupCanvas('c-perf');
+  const a=pad(w,h);
+  const days=D.map(r=>r.day_index);
+  drawAxes(ctx,a,[0,0.25,0.5,0.75,1.0],1,days,D);
+  drawPhases(ctx,a,days,D);
+  ctx.beginPath();let s2=false;
+  D.forEach((r,i)=>{
+    const v=r.last_block_perf_roll5??r.last_block_perf;
+    if(v==null){s2=false;return;}
+    const x=mx(r.day_index,days,a),y=my(v,0,1,a);
+    s2?ctx.lineTo(x,y):ctx.moveTo(x,y);s2=true;
+  });
+  ctx.strokeStyle='#2d6a4f';ctx.lineWidth=2;ctx.stroke();
+  D.forEach(r=>{
+    const v=r.last_block_perf;if(v==null)return;
+    const x=mx(r.day_index,days,a),y=my(v,0,1,a);
+    const mod=(r.session_end_mod||'').toLowerCase();
+    ctx.beginPath();ctx.arc(x,y,3.5,0,Math.PI*2);
+    ctx.fillStyle=mod.includes('vision')?'#1e4d8c':'#c05a1a';
+    ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=0.8;ctx.stroke();
+  });
+  const addHoverFn = (id,days,a,D,tipFn) => {
+    const canvas=document.getElementById(id);
+    canvas.onmousemove=e=>{
+      const r=canvas.getBoundingClientRect();
+      const mx2=e.clientX-r.left;
+      let bi=-1,bd=9999;
+      days.forEach((d,i)=>{const dist=Math.abs(mx(d,days,a)-mx2);if(dist<bd){bd=dist;bi=i;}});
+      if(bd>20){hideTT();return;}
+      const {head,rows}=tipFn(bi);
+      showTT(e,head,rows);
+    };
+    canvas.onmouseleave=hideTT;
+  };
+  addHoverFn('c-perf',days,a,D,i=>{
+    const r=D[i];
+    return{head:`Day ${r.day_index} · ${fmtDate(r.date)}`,rows:[
+      ['Performance',(r.last_block_perf*100).toFixed(1)+'%'],
+      ['Modality',r.session_end_mod],
+      ['Phase',r.phase_id],
+      ['Predicted DTN',r.days_to_next_switch!=null?r.days_to_next_switch.toFixed(1)+' sess':'—'],
+    ]};
+  });
+}
+
+window.addEventListener('load', () => { render(); });
+window.addEventListener('resize', ()=>{ if(currentData) render(); });
+</script>
+</body>
+</html>
