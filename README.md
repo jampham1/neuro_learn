@@ -35,7 +35,7 @@ and reaction time dynamics.
 ```bash
 # Clone the repo and create a virtual environment
 git clone <repo-url>
-cd v1_acc
+cd neuro_learn
 python -m venv .venv
 source .venv/bin/activate       # macOS / Linux
 # .venv\Scripts\activate        # Windows

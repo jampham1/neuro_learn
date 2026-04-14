@@ -14,7 +14,7 @@ from scipy.optimize import curve_fit
 from pathlib import Path
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
-DATA_ROOT        = Path('/Users/jamespham/PycharmProjects/v1_acc/data/GR010')
+DATA_ROOT        = Path('//data/GR010')
 OUTPUT_CSV       = Path('GR010_features.csv')
 MIN_TRIALS       = 200
 EXCLUDE_SESSIONS = {3, 5, 166}

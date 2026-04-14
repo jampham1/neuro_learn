@@ -29,7 +29,7 @@ def load_module(path):
     return mod
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
-DATA_ROOT      = Path('/Users/jamespham/PycharmProjects/v1_acc/data/GR010')
+DATA_ROOT      = Path('//data/GR010')
 FEATURES_CSV   = Path('GR010_switch_labels.csv')
 MODEL_PATH     = Path('model_switch.json')
 EXTRACTOR_PATH = Path('extract_features.py')
