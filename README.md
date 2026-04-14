@@ -1,8 +1,7 @@
 # NeuroLearn — Mouse Learning Trajectory Predictor
 
 A machine learning pipeline for predicting when a mouse will reach criterion
-and trigger a modality switch during visual/auditory discrimination training.
-Built for the V1/ACC lab's SpatialSparrow task.
+and trigger a modality switch during visual/auditory discrimination training, utilizing gradient boosting trained on complete learning cycles from previous mice samples. 
 
 ---
 
